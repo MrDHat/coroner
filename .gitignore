@@ -21,9 +21,8 @@
 # Golang Files/Directories
 vendor/
 gin-bin
-soccer-manager
-Akshay-Katyal
 .idea
 *.swp
 
 modd/
+coroner
