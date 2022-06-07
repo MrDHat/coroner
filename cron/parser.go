@@ -1,6 +1,7 @@
 package cron
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -32,7 +33,7 @@ func (p *parser) validate() ([]string, error) {
 	return exprParts, nil
 }
 
-func (p *parser) parseSection(section string, sectionName SectionName) ([]string, error) {
+func (p *parser) parseSection(section string, sectionName SectionName) []string {
 	var (
 		min = Ranges[sectionName][0]
 		max = Ranges[sectionName][1]
@@ -41,17 +42,18 @@ func (p *parser) parseSection(section string, sectionName SectionName) ([]string
 
 	if section == "?" {
 		res = append(res, "no specific meaning")
-		return res, nil
+		return res
 	}
 
 	num, err := strconv.Atoi(section)
 	if err == nil {
 		// number type data
 		if num < min || num > max {
-			return nil, fmt.Errorf("%d is out of range (%d-%d) for %v", num, min, max, sectionName)
+			res = append(res, fmt.Sprintf("%d is out of range (%d-%d) for %v", num, min, max, sectionName))
+			return res
 		} else {
 			res = append(res, section)
-			return res, nil
+			return res
 		}
 	}
 
@@ -59,19 +61,20 @@ func (p *parser) parseSection(section string, sectionName SectionName) ([]string
 		for i := min; i <= max; i++ {
 			res = append(res, strconv.Itoa(i))
 		}
-		return res, nil
+		return res
 	}
 
 	part := strings.TrimPrefix(section, "*/")
 	if part != section {
 		interval, err := strconv.Atoi(part)
 		if err != nil {
-			return nil, err
+			res = append(res, err.Error())
+			return res
 		}
 		for i := min; i <= max; i += interval {
 			res = append(res, strconv.Itoa(i))
 		}
-		return res, nil
+		return res
 	}
 
 	if strings.Contains(section, ",") {
@@ -79,59 +82,66 @@ func (p *parser) parseSection(section string, sectionName SectionName) ([]string
 		for _, part := range parts {
 			num, err := strconv.Atoi(part)
 			if err != nil {
-				return nil, err
+				res = append(res, err.Error())
+				return res
 			} else if num < min || num > max {
-				return nil, fmt.Errorf("%d is out of range (%d-%d) for %v", num, min, max, sectionName)
+				res = append(res, fmt.Sprintf("%d is out of range (%d-%d) for %v", num, min, max, sectionName))
+				return res
 			}
 			res = append(res, part)
 		}
-		return res, nil
+		return res
 	}
 
 	if strings.Contains(section, "-") {
 		parts := strings.Split(section, "-")
 		if len(parts) != 2 {
-			return nil, errors.New("invalid range")
+			res = append(res, fmt.Sprintf("invalid range %v", section))
+			return res
 		}
 
 		p1, err := strconv.Atoi(parts[0])
 		if err != nil {
-			return nil, err
+			res = append(res, err.Error())
+			return res
 		} else if p1 < min {
-			e := fmt.Sprintf("%d must be less than %d", p1, min)
-			return nil, errors.New(e)
+			res = append(res, fmt.Sprintf("%d must be less than %d", p1, min))
+			return res
 		}
 
 		p2, err := strconv.Atoi(parts[1])
 		if err != nil {
-			return nil, err
+			res = append(res, err.Error())
+			return res
 		} else if p2 > max {
-			e := fmt.Sprintf("%d must be greater than %d", p1, min)
-			return nil, errors.New(e)
+			res = append(res, fmt.Sprintf("%d must be greater than %d", p1, min))
+			return res
 		}
 
 		if p1 > p2 {
-			return nil, errors.New("invalid input")
+			res = append(res, fmt.Sprintf("%d must be less than %d", p1, p2))
+			return res
 		}
 
 		for i := p1; i <= p2; i++ {
 			res = append(res, strconv.Itoa(i))
 		}
 
-		return res, nil
+		return res
 	}
 
 	// special case of "L"
 	if strings.Contains(section, "L") {
 		num, err := strconv.ParseInt(string(section[0]), 10, 64)
 		if err != nil {
-			return nil, err
+			res = append(res, err.Error())
+			return res
 		}
 		fmt.Println(num)
 		if sectionName == SectionDayOfMonth {
 			date := MonthNumberOfDays[int(num)]
 			res = append(res, strconv.Itoa(date))
-			return res, nil
+			return res
 		}
 	}
 
@@ -139,36 +149,58 @@ func (p *parser) parseSection(section string, sectionName SectionName) ([]string
 	if strings.Contains(section, "W") {
 		if sectionName == SectionDayOfWeek {
 			res = append(res, strconv.Itoa(int(max)))
-			return res, nil
+			return res
 		}
 	}
 
-	return nil, errors.New("invalid section input")
+	res = append(res, fmt.Sprintf("invalid section %v", section))
+	return res
+}
+
+func (p *parser) prettyPrint(i interface{}) string {
+	s, _ := json.MarshalIndent(i, "", "\t")
+	return string(s)
 }
 
 func (p *parser) Parse(expr string) {
 	p.Expr = expr
-
 	exprParts, err := p.validate()
 	if err != nil {
 		panic(err)
 	}
-	cmd := exprParts[5]
 
-	exprParts = exprParts[:5]
-	for i := range exprParts {
-		section := PartPositions[i]
-		sectionStr := exprParts[i]
-
-		r, err := p.parseSection(sectionStr, section)
-		if err != nil {
-			fmt.Printf("%v  %v\n", PartOutput[section], err)
-		} else {
-			fmt.Printf("%v  %v\n", PartOutput[section], r)
-		}
+	type result struct {
+		Minute     []string
+		Hour       []string
+		DayOfMonth []string
+		Month      []string
+		DayOfWeek  []string
+		Command    string
 	}
 
-	fmt.Println("command  ", cmd)
+	r := result{
+		Minute:     p.parseSection(exprParts[0], SectionMinute),
+		Hour:       p.parseSection(exprParts[1], SectionHour),
+		DayOfMonth: p.parseSection(exprParts[2], SectionDayOfMonth),
+		Month:      p.parseSection(exprParts[3], SectionMonth),
+		DayOfWeek:  p.parseSection(exprParts[4], SectionDayOfWeek),
+		Command:    exprParts[5],
+	}
+
+	fmt.Printf(
+		"minute\t\t%s"+
+			"\nhour\t\t%s"+
+			"\nday of month\t%s"+
+			"\nmonth\t\t%s"+
+			"\nday of week\t%s"+
+			"\ncommand\t\t%s",
+		strings.Join(r.Minute, " "),
+		strings.Join(r.Hour, " "),
+		strings.Join(r.DayOfMonth, " "),
+		strings.Join(r.Month, " "),
+		strings.Join(r.DayOfWeek, " "),
+		r.Command,
+	)
 }
 
 func NewParser() Parser {
