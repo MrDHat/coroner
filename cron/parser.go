@@ -39,6 +39,11 @@ func (p *parser) parseSection(section string, sectionName SectionName) ([]string
 		res = make([]string, 0)
 	)
 
+	if section == "?" {
+		res = append(res, "no specific meaning")
+		return res, nil
+	}
+
 	num, err := strconv.Atoi(section)
 	if err == nil {
 		// number type data
@@ -114,6 +119,28 @@ func (p *parser) parseSection(section string, sectionName SectionName) ([]string
 		}
 
 		return res, nil
+	}
+
+	// special case of "L"
+	if strings.Contains(section, "L") {
+		num, err := strconv.ParseInt(string(section[0]), 10, 64)
+		if err != nil {
+			return nil, err
+		}
+		fmt.Println(num)
+		if sectionName == SectionDayOfMonth {
+			date := MonthNumberOfDays[int(num)]
+			res = append(res, strconv.Itoa(date))
+			return res, nil
+		}
+	}
+
+	// special case of "W"
+	if strings.Contains(section, "W") {
+		if sectionName == SectionDayOfWeek {
+			res = append(res, strconv.Itoa(int(max)))
+			return res, nil
+		}
 	}
 
 	return nil, errors.New("invalid section input")
