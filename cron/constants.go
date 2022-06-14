@@ -47,6 +47,8 @@ var MonthNumberOfDays = map[int]int{
 	12: 31,
 }
 
+var MaxDayOfWeek = 7
+var MinDayOfWeek = 1
 var DayOfWeekName = map[int]string{
 	1: "Monday",
 	2: "Tuesday",
@@ -55,4 +57,14 @@ var DayOfWeekName = map[int]string{
 	5: "Friday",
 	6: "Saturday",
 	7: "Sunday",
+}
+
+var NameOfTheWeekDay = map[string]int{
+	"Mon": 1,
+	"Tue": 2,
+	"Wed": 3,
+	"Thu": 4,
+	"Fri": 5,
+	"Sat": 6,
+	"Sun": 7,
 }

@@ -10,6 +10,7 @@ import (
 
 type Parser interface {
 	Parse(expr string)
+	ParseSection(section string, sectionName SectionName) []string
 }
 
 type parser struct {
@@ -33,7 +34,23 @@ func (p *parser) validate() ([]string, error) {
 	return exprParts, nil
 }
 
-func (p *parser) parseSection(section string, sectionName SectionName) []string {
+func (p *parser) Atoi(section string, sectionName SectionName) (int, error) {
+	num, err := strconv.Atoi(section)
+	if err != nil {
+		// check if this is a week day string
+		if sectionName == SectionDayOfWeek {
+			val, ok := NameOfTheWeekDay[section]
+			if !ok {
+				err = errors.New("invalid data")
+				return 0, err
+			}
+			return val, nil
+		}
+	}
+	return num, nil
+}
+
+func (p *parser) ParseSection(section string, sectionName SectionName) []string {
 	var (
 		min = Ranges[sectionName][0]
 		max = Ranges[sectionName][1]
@@ -45,14 +62,14 @@ func (p *parser) parseSection(section string, sectionName SectionName) []string 
 		return res
 	}
 
-	num, err := strconv.Atoi(section)
+	num, err := p.Atoi(section, sectionName)
 	if err == nil {
 		// number type data
 		if num < min || num > max {
 			res = append(res, fmt.Sprintf("%d is out of range (%d-%d) for %v", num, min, max, sectionName))
 			return res
 		} else {
-			res = append(res, section)
+			res = append(res, fmt.Sprintf("%d", num))
 			return res
 		}
 	}
@@ -66,7 +83,7 @@ func (p *parser) parseSection(section string, sectionName SectionName) []string 
 
 	part := strings.TrimPrefix(section, "*/")
 	if part != section {
-		interval, err := strconv.Atoi(part)
+		interval, err := p.Atoi(part, sectionName)
 		if err != nil {
 			res = append(res, err.Error())
 			return res
@@ -80,7 +97,7 @@ func (p *parser) parseSection(section string, sectionName SectionName) []string 
 	if strings.Contains(section, ",") {
 		parts := strings.Split(section, ",")
 		for _, part := range parts {
-			num, err := strconv.Atoi(part)
+			num, err := p.Atoi(part, sectionName)
 			if err != nil {
 				res = append(res, err.Error())
 				return res
@@ -100,7 +117,7 @@ func (p *parser) parseSection(section string, sectionName SectionName) []string 
 			return res
 		}
 
-		p1, err := strconv.Atoi(parts[0])
+		p1, err := p.Atoi(parts[0], sectionName)
 		if err != nil {
 			res = append(res, err.Error())
 			return res
@@ -109,7 +126,7 @@ func (p *parser) parseSection(section string, sectionName SectionName) []string 
 			return res
 		}
 
-		p2, err := strconv.Atoi(parts[1])
+		p2, err := p.Atoi(parts[1], sectionName)
 		if err != nil {
 			res = append(res, err.Error())
 			return res
@@ -118,13 +135,20 @@ func (p *parser) parseSection(section string, sectionName SectionName) []string 
 			return res
 		}
 
+		end := p2
+		isMultipleRange := false
 		if p1 > p2 {
-			res = append(res, fmt.Sprintf("%d must be less than %d", p1, p2))
-			return res
+			end = MaxDayOfWeek
+			isMultipleRange = true
 		}
 
-		for i := p1; i <= p2; i++ {
+		for i := p1; i <= end; i++ {
 			res = append(res, strconv.Itoa(i))
+		}
+		if isMultipleRange {
+			for i := MinDayOfWeek; i <= p2; i++ {
+				res = append(res, strconv.Itoa(i))
+			}
 		}
 
 		return res
@@ -137,7 +161,6 @@ func (p *parser) parseSection(section string, sectionName SectionName) []string 
 			res = append(res, err.Error())
 			return res
 		}
-		fmt.Println(num)
 		if sectionName == SectionDayOfMonth {
 			date := MonthNumberOfDays[int(num)]
 			res = append(res, strconv.Itoa(date))
@@ -179,11 +202,11 @@ func (p *parser) Parse(expr string) {
 	}
 
 	r := result{
-		Minute:     p.parseSection(exprParts[0], SectionMinute),
-		Hour:       p.parseSection(exprParts[1], SectionHour),
-		DayOfMonth: p.parseSection(exprParts[2], SectionDayOfMonth),
-		Month:      p.parseSection(exprParts[3], SectionMonth),
-		DayOfWeek:  p.parseSection(exprParts[4], SectionDayOfWeek),
+		Minute:     p.ParseSection(exprParts[0], SectionMinute),
+		Hour:       p.ParseSection(exprParts[1], SectionHour),
+		DayOfMonth: p.ParseSection(exprParts[2], SectionDayOfMonth),
+		Month:      p.ParseSection(exprParts[3], SectionMonth),
+		DayOfWeek:  p.ParseSection(exprParts[4], SectionDayOfWeek),
 		Command:    exprParts[5],
 	}
 
